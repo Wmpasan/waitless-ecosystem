@@ -8,6 +8,14 @@ const BOOTSTRAP_EMAIL = 'contact.pasan@gmail.com';
 function $(sel){ return document.querySelector(sel); }
 function showMessage(msg, type){ const el = $('#message'); el.textContent = msg; el.className = 'message ' + type; }
 
+async function isSuperAdmin(user) {
+  if(!user) return false;
+  if(user.uid === BOOTSTRAP_UID) return true;
+  if((user.email || '').toLowerCase() === BOOTSTRAP_EMAIL) return true;
+  const tokenResult = await user.getIdTokenResult();
+  return !!(tokenResult.claims && tokenResult.claims.superadmin === true);
+}
+
 async function checkApprovalStatus(user) {
   if (!user) {
     window.location.href = 'index.html';
@@ -23,8 +31,9 @@ async function checkApprovalStatus(user) {
     let statusBadge = 'Unknown';
     let statusClass = '';
     let canAccess = false;
+    const superAdmin = await isSuperAdmin(user);
 
-    if (role === 'approved') {
+    if (role === 'approved' || superAdmin) {
       statusBadge = 'Approved';
       statusClass = 'badge-approved';
       canAccess = true;

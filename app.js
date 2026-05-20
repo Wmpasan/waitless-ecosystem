@@ -22,7 +22,38 @@ function showSection(id){
   const tabSel = tabMap[id];
   if(tabSel){ const t = document.querySelector(tabSel); if(t) t.classList.add('active'); }
 }
-function showMessage(msg, type='info'){ const el = $('#message'); el.textContent = msg; el.className = 'message ' + type; setTimeout(()=>{ el.textContent=''; el.className='message'; }, 6000); }
+function getAuthErrorMessage(err){
+  if(!err) return 'An unexpected error occurred. Please try again.';
+  const code = (err.code || '').toString().toLowerCase();
+  switch(code){
+    case 'auth/user-not-found':
+      return 'No account found for that email address.';
+    case 'auth/invalid-email':
+      return 'Please enter a valid email address.';
+    case 'auth/wrong-password':
+      return 'Incorrect password. Please check your email and password.';
+    case 'auth/user-disabled':
+      return 'This account has been disabled. Contact support if you need help.';
+    case 'auth/email-already-in-use':
+      return 'That email is already registered. Please sign in instead.';
+    case 'auth/weak-password':
+      return 'Password is too weak. Use at least 6 characters.';
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Please wait a few minutes and try again.';
+    case 'auth/network-request-failed':
+      return 'Network error. Check your connection and try again.';
+    default:
+      return err.message || String(err);
+  }
+}
+function showMessage(msg, type='info'){
+  const el = $('#message');
+  if(el){
+    el.textContent = msg;
+    el.className = 'message ' + type;
+    setTimeout(()=>{ el.textContent=''; el.className='message'; }, 6000);
+  }
+}
 function generateSalt(){ const a = new Uint8Array(16); window.crypto.getRandomValues(a); return Array.from(a).map(b=>b.toString(16).padStart(2,'0')).join(''); }
 async function isSuperAdmin(user){
   if(!user) return false;
@@ -134,7 +165,7 @@ $('#register-form').addEventListener('submit', async e=>{
     showMessage('Registration successful. Awaiting approval (role: pending).', 'success');
     showSection('#profile-section');
     renderProfile(userCred.user);
-  }catch(err){ showMessage(err.message, 'error'); }
+  }catch(err){ showMessage(getAuthErrorMessage(err), 'error'); }
 });
 
 // Login
@@ -158,7 +189,7 @@ $('#login-form').addEventListener('submit', async e=>{
     showMessage('Logged in', 'success');
     showSection('#profile-section');
     renderProfile(userCred.user);
-  }catch(err){ showMessage(err.message, 'error'); }
+  }catch(err){ showMessage(getAuthErrorMessage(err), 'error'); }
 });
 
 // Reset
@@ -169,7 +200,7 @@ $('#reset-form').addEventListener('submit', async e=>{
     await auth.sendPasswordResetEmail(email);
     showMessage('Password reset email sent.', 'success');
     document.querySelector('#show-login').click();
-  }catch(err){ showMessage(err.message, 'error'); }
+  }catch(err){ showMessage(getAuthErrorMessage(err), 'error'); }
 });
 
 // Sign out

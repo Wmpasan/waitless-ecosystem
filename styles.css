@@ -21,7 +21,10 @@ select{display:block;width:100%;padding:12px 14px;border:1px solid #e3eefc;borde
 .ghost{background:transparent;border:1px solid rgba(3,102,214,0.12);color:var(--accent)}
 .muted{font-size:0.9rem;color:var(--muted)}
 .small{font-size:0.85rem}
-.message{min-height:26px;margin-top:12px;color:var(--muted)}
+.message{min-height:26px;margin-top:12px;color:var(--muted);padding:10px 14px;border-radius:10px;background:rgba(227,235,246,0.7)}
+.message.info{background:#ebf4ff;color:#1e3a8a}
+.message.success{background:#ecfdf3;color:#064e3b}
+.message.error{background:#ffe4e6;color:#9f1239}
 
 .hidden{display:none}
 .admin-panel{margin-top:14px;padding:14px;border:1px solid #e8eef8;border-radius:10px;background:#fbfdff}
@@ -33,7 +36,8 @@ select{display:block;width:100%;padding:12px 14px;border:1px solid #e3eefc;borde
 .approve-btn,.reject-btn{border:0;border-radius:8px;padding:8px 10px;cursor:pointer}
 .approve-btn{background:#0a8f47;color:#fff}
 .reject-btn{background:#d03838;color:#fff}
-.admin-actions-row{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.admin-actions-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:12px}
+.admin-actions-row button{width:100%}
 
 .toast-wrap{position:fixed;top:14px;right:14px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
 .toast{min-width:220px;max-width:360px;padding:10px 12px;border-radius:10px;color:#fff;box-shadow:0 10px 24px rgba(0,0,0,0.18);opacity:1;transform:translateY(0);transition:opacity .25s ease,transform .25s ease}
