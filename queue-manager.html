@@ -6,18 +6,38 @@
   <title>Queue Manager</title>
   <link rel="stylesheet" href="styles.css" />
   <style>
+    /* Customize panel (inline) */
+    .customize-panel-inline{padding:18px;background:#fff;border-radius:10px;border:1px solid #e8eef8}
+    .customize-header-inline{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+    .customize-header-inline h3{margin:0}
+    .customize-header-inline button{border:0;background:transparent;font-size:18px;cursor:pointer}
+    .customize-body-inline{display:block;gap:0}
+    .customize-body-inline h4{margin:0 0 8px 0}
+    .customize-section{background:#fff;padding:18px;border-radius:10px;border:1px solid #eef5ff;display:flex;flex-direction:column}
+    .customize-form{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
+    .customize-form .row{display:flex;gap:8px}
+    .customize-form input,.customize-form select{flex:1;padding:10px;border:1px solid #e6f0fb;border-radius:8px}
+    .customize-list-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .item-controls{display:flex;gap:6px}
+    .customize-empty{padding:12px;text-align:center;color:#6b7785;background:linear-gradient(180deg,#fbfdff, #fff);border-radius:6px;border:1px dashed #e8eef8}
+    @media(max-width:900px){ .customize-body-inline{grid-template-columns:1fr;} }
     .qm-sidebar { display: flex; flex-direction: column; }
     .qm-main { display: flex; flex-direction: column; }
-    .qm-nav { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 2px solid #e3eefc; overflow-x: auto; }
-    .qm-tab { padding: 12px 14px; border: 0; background: transparent; cursor: pointer; color: #6b7785; font-weight: 600; white-space: nowrap; transition: all 0.2s ease; border-left: 3px solid transparent; }
-    .qm-tab.active { border-left: 3px solid #0366d6; color: #0366d6; background: rgba(3,102,214,0.08); }
+    .qm-nav { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 2px solid #e3eefc; overflow-x: auto; align-items: flex-start; }
+    .qm-tab { padding: 12px 14px; border: 0; background: transparent; cursor: pointer; color: #6b7785; font-weight: 600; white-space: nowrap; transition: all 0.2s ease; border-bottom: 3px solid transparent; display:flex; align-items:center; }
+    .qm-tab.active { border-bottom: 3px solid #0366d6; color: #0366d6; background: rgba(3,102,214,0.08); }
     .qm-tab:hover { color: #0366d6; }
     .qm-content { display: none; }
     .qm-content.active { display: block; animation: fadeIn 0.2s ease; }
+    .qm-content { padding: 8px 0; }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     .qm-content h2 { margin: 0 0 12px 0; color: #0b1220; }
     .qm-section { margin-bottom: 24px; padding: 16px; background: #fbfdff; border-radius: 10px; border: 1px solid #e8eef8; }
     .qm-form { display: grid; gap: 12px; margin-bottom: 16px; }
+    /* Balanced alignment helpers */
+    .center-text { text-align: center; }
+    .flex-center { display:flex; align-items:center; justify-content:center; }
+    .balanced-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
     .qm-form input, .qm-form select { padding: 10px 12px; border: 1px solid #dbe6ef; border-radius: 8px; font-family: inherit; }
     .qm-form input:focus, .qm-form select:focus { outline: none; border-color: #0366d6; box-shadow: 0 0 0 3px rgba(3,102,214,0.1); }
     .qm-form button { padding: 10px 14px; background: #0366d6; color: #fff; border: 0; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.2s ease; }
@@ -77,77 +97,24 @@
 
     <div id="message" class="message" role="status" aria-live="polite"></div>
 
-    <div style="margin-bottom: 16px; display: flex; gap: 10px; justify-content: space-between;">
-      <button id="back-to-dashboard" class="primary ghost">← Back to Dashboard</button>
+    <div style="margin-bottom: 16px; display: flex; gap: 10px; justify-content: space-between; align-items:center;">
+      <div>
+        <button id="back-to-dashboard" class="primary ghost">← Back to Dashboard</button>
+        <button id="customize-org" class="primary ghost">Customize Organization</button>
+      </div>
       <button id="signout" class="primary" style="background: #d03838;">Sign Out</button>
     </div>
 
-    <div class="auth-card" style="display: grid; grid-template-columns: 160px 1fr; gap: 24px; align-items: start;">
+    <div class="auth-card" style="display: grid; grid-template-columns: 1fr; gap: 24px; align-items: start;">
       <div class="qm-sidebar">
-        <div class="qm-nav" role="tablist" style="display: flex; flex-direction: column; gap: 0; border-bottom: none; border-right: 2px solid #e3eefc;">
-          <button class="qm-tab active" data-tab="counters" role="tab">Counters</button>
-          <button class="qm-tab" data-tab="services" role="tab">Services</button>
-          <button class="qm-tab" data-tab="assignments" role="tab">Assignments</button>
+        <div class="qm-nav" role="tablist">
+          <button class="qm-tab active" data-tab="reports" role="tab">Reports</button>
+          <!-- Counters, Services, Assignments tabs removed per request -->
           <button class="qm-tab" data-tab="queue" role="tab">Queue</button>
-          <button class="qm-tab" data-tab="reports" role="tab">Reports</button>
         </div>
       </div>
 
       <div class="qm-main">
-
-      <!-- Counters Tab -->
-      <div id="counters" class="qm-content active">
-        <h2>Counter Management</h2>
-        <div class="qm-form">
-          <input id="counter-name" placeholder="Counter name (e.g., Counter 1)" />
-          <select id="counter-status">
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
-          <button id="add-counter">Add Counter</button>
-        </div>
-        <div id="counters-list" class="qm-list"></div>
-      </div>
-
-      <!-- Services Tab -->
-      <div id="services" class="qm-content">
-        <h2>Service Management</h2>
-        <div class="qm-form">
-          <input id="service-name" placeholder="Service name (e.g., General Inquiry)" />
-          <input id="service-desc" placeholder="Description (optional)" />
-          <input id="service-time" placeholder="Estimated time (minutes)" type="number" />
-          <button id="add-service">Add Service</button>
-        </div>
-        <div id="services-list" class="qm-list"></div>
-      </div>
-
-      <!-- Assignments Tab -->
-      <div id="assignments" class="qm-content">
-        <h2>Assign Services to Counters</h2>
-        
-        <div style="margin-bottom: 24px;">
-          <p class="lead">Select a counter and assign services</p>
-          <div id="counters-grid" class="qm-counter-grid"></div>
-        </div>
-        
-        <div id="assignment-panel" style="display: none; padding: 16px; background: #fbfdff; border: 1px solid #e8eef8; border-radius: 10px; margin-bottom: 24px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-            <div>
-              <h3 style="margin: 0 0 4px 0; color: #0b1220;" id="selected-counter-name"></h3>
-              <p style="margin: 0; color: #6b7785; font-size: 0.85rem;" id="selected-counter-status"></p>
-            </div>
-            <button onclick="clearSelection()" style="padding: 8px 12px; background: #e0e0e0; border: 0; border-radius: 6px; cursor: pointer;">Change</button>
-          </div>
-          
-          <div style="border-top: 1px solid #e3eefc; padding-top: 16px;">
-            <h4 style="margin: 0 0 12px 0; color: #0b1220;">Select Services</h4>
-            <div id="services-checkboxes" style="display: grid; gap: 10px; margin-bottom: 16px;"></div>
-            <button id="save-assignment" class="primary">Save Assignment</button>
-          </div>
-        </div>
-        
-        <div id="assignments-list" class="qm-list"></div>
-      </div>
 
       <!-- Queue Tab -->
       <div id="queue" class="qm-content">
@@ -156,8 +123,78 @@
         <div id="queue-status"></div>
       </div>
 
+      <!-- Customize Panel (inline) -->
+      <div id="customize" class="qm-content">
+        <div class="customize-panel-inline">
+          <div class="customize-header-inline">
+            <h3>Customize Organization</h3>
+            <button id="back-to-reports" aria-label="Back">← Back</button>
+          </div>
+          <div class="customize-org-info" style="margin-bottom:18px; padding:16px; background:#f9fbff; border:1px solid #e6f0fb; border-radius:10px;">
+            <div class="customize-list-header">
+              <h4>Organization Details</h4>
+              <div class="item-controls">
+                <button id="save-organization" class="primary">Save</button>
+              </div>
+            </div>
+            <div class="customize-form">
+              <input id="org-name" placeholder="Organization name" aria-label="Organization name" />
+              <input id="org-phone" type="tel" placeholder="Phone number" aria-label="Phone number" />
+              <input id="org-address" placeholder="Address" aria-label="Address" />
+            </div>
+          </div>
+          <div class="customize-body-inline">
+              <section class="customize-section" data-section="counters">
+                <div class="customize-list-header">
+                  <h4>Counters</h4>
+                  <div class="item-controls">
+                    <button id="modal-add-counter" class="primary">Add</button>
+                  </div>
+                </div>
+                <div class="customize-form">
+                  <div class="row">
+                    <input id="modal-counter-name" placeholder="Counter name" aria-label="Counter name" />
+                    <select id="modal-counter-status" aria-label="Counter status"><option value="active">Active</option><option value="inactive">Inactive</option></select>
+                  </div>
+                </div>
+                <div id="customize-counters-list" class="qm-list"></div>
+              </section>
+              <section class="customize-section hidden" data-section="services">
+                <div class="customize-list-header">
+                  <h4>Services</h4>
+                  <div class="item-controls">
+                    <button id="modal-add-service" class="primary">Add</button>
+                  </div>
+                </div>
+                <div class="customize-form">
+                  <div class="row">
+                    <input id="modal-service-name" placeholder="Service name" aria-label="Service name" />
+                    <input id="modal-service-time" placeholder="Time (min)" type="number" aria-label="Estimated time" style="width:110px" />
+                  </div>
+                  <input id="modal-service-desc" placeholder="Description" aria-label="Description" />
+                </div>
+                <div id="customize-services-list" class="qm-list"></div>
+              </section>
+              <section class="customize-section hidden" data-section="assignments">
+                <div class="customize-list-header">
+                  <h4>Assignments</h4>
+                  <div class="item-controls">
+                    <button id="modal-save-assignment" class="primary">Save</button>
+                  </div>
+                </div>
+                <div class="customize-form">
+                  <select id="modal-assignment-counter" aria-label="Select counter"><option value="">Select counter</option></select>
+                  <div id="modal-assignment-services" style="margin-top:8px; display:grid; gap:8px;"></div>
+                </div>
+                <div id="customize-assignments-list" class="qm-list"></div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Reports Tab -->
-      <div id="reports" class="qm-content">
+      <div id="reports" class="qm-content active">
         <h2>Reports & Analytics</h2>
         <p class="lead">Visual analytics and performance metrics</p>
         
@@ -215,6 +252,8 @@
       </div>
     </div>
   </div>
+
+  
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>

@@ -8,6 +8,8 @@
 
 // Store current user UID
 let currentUserUID = null;
+const BOOTSTRAP_SUPERADMIN_UID = 'tcWCQtILJNcahfAQA3qakrUP9Nv1';
+const BOOTSTRAP_SUPERADMIN_EMAIL = 'contact.pasan@gmail.com';
 
 // ============================================================
 // UTILITY FUNCTIONS
@@ -33,10 +35,24 @@ function formatDate(ts) {
   catch(_) { return String(ts); }
 }
 
+async function isSuperAdmin(user) {
+  if(!user) return false;
+  if(user.uid === BOOTSTRAP_SUPERADMIN_UID) return true;
+  if((user.email || '').toLowerCase() === BOOTSTRAP_SUPERADMIN_EMAIL) return true;
+  const tokenResult = await user.getIdTokenResult();
+  return !!(tokenResult.claims && tokenResult.claims.superadmin === true);
+}
+
+function getAssignmentServices(assignment) {
+  return Array.isArray(assignment.services) ? assignment.services : [];
+}
+
 // Global state
 let currentCounters = {};
 let currentServices = {};
 let currentAssignments = {};
+let currentQueueData = {};
+let activeQueueListeners = {};
 
 // ============================================================
 // TAB NAVIGATION
@@ -135,6 +151,17 @@ const servicesDB = {
     });
   }
 };
+
+function setupQueueListeners(serviceIds = []) {
+  serviceIds.forEach(serviceId => {
+    if(!serviceId || activeQueueListeners[serviceId]) return;
+    activeQueueListeners[serviceId] = true;
+    queueDB.listenByService(serviceId, queueData => {
+      currentQueueData[serviceId] = queueData || {};
+      renderQueueStatus(currentQueueData, currentServices);
+    });
+  });
+}
 
 // Assignments CRUD
 const assignmentsDB = {
@@ -348,6 +375,110 @@ function renderCounterCards(counters, services) {
   });
 }
 
+function renderCustomizeCounters(){
+  const countersList = $('#customize-counters-list');
+  if(!countersList) return;
+  countersList.innerHTML = '';
+  Object.entries(currentCounters).forEach(([id,c])=>{
+    const item = document.createElement('div'); item.className='qm-item';
+    item.innerHTML = `<div class="qm-item-info"><div class="qm-item-name">${c.name}</div><div class="qm-item-meta">Status: ${c.status}</div></div><div class="qm-item-actions"><button class="btn-edit" onclick="editCounter('${id}')">Edit</button><button class="btn-delete" onclick="deleteCounter('${id}')">Delete</button></div>`;
+    countersList.appendChild(item);
+  });
+  if(Object.keys(currentCounters).length===0) countersList.innerHTML='<p class="muted small">No counters.</p>';
+}
+
+function renderCustomizeServices(){
+  const servicesList = $('#customize-services-list');
+  if(!servicesList) return;
+  servicesList.innerHTML = '';
+  Object.entries(currentServices).forEach(([id,s])=>{
+    const item = document.createElement('div'); item.className='qm-item';
+    item.innerHTML = `<div class="qm-item-info"><div class="qm-item-name">${s.name}</div><div class="qm-item-meta">${s.description||'(no description)'} • ${s.estimatedTime}m</div></div><div class="qm-item-actions"><button class="btn-edit" onclick="editService('${id}')">Edit</button><button class="btn-delete" onclick="deleteService('${id}')">Delete</button></div>`;
+    servicesList.appendChild(item);
+  });
+  if(Object.keys(currentServices).length===0) servicesList.innerHTML='<p class="muted small">No services.</p>';
+}
+
+function renderCustomizeAssignments(){
+  const assignmentsList = $('#customize-assignments-list');
+  if(!assignmentsList) return;
+  assignmentsList.innerHTML = '';
+  Object.entries(currentAssignments).forEach(([counterId,assign])=>{
+    const counter = currentCounters[counterId] || {name:'Unknown'};
+    const names = (assign.services||[]).map(sid=> (currentServices[sid] && currentServices[sid].name) || 'Unknown').join(', ');
+    const item = document.createElement('div'); item.className='qm-item';
+    item.innerHTML = `<div class="qm-item-info"><div class="qm-item-name">${counter.name}</div><div class="qm-item-meta">Services: ${names || '(none)'}</div></div><div class="qm-item-actions"><button class="btn-edit" onclick="selectCounterCard('${counterId}')">Edit</button></div>`;
+    assignmentsList.appendChild(item);
+  });
+  if(Object.keys(currentAssignments).length===0) assignmentsList.innerHTML='<p class="muted small">No assignments.</p>';
+}
+
+function renderCustomizeLists(){
+  renderCustomizeCounters();
+  renderCustomizeServices();
+  renderCustomizeAssignments();
+  renderCustomizeControls();
+}
+
+function renderCustomizeSection(section){
+  if(section === 'services') renderCustomizeServices();
+  else if(section === 'assignments') renderCustomizeAssignments();
+  else renderCustomizeCounters();
+  renderCustomizeControls();
+}
+
+function renderCustomizeControls(){
+  const assignCounterSel = $('#modal-assignment-counter');
+  const assignServicesWrap = $('#modal-assignment-services');
+  if(assignCounterSel){
+    assignCounterSel.innerHTML = '<option value="">Select counter</option>';
+    Object.entries(currentCounters).forEach(([id,c])=>{
+      const opt = document.createElement('option'); opt.value = id; opt.textContent = c.name; assignCounterSel.appendChild(opt);
+    });
+  }
+}
+
+function loadOrganizationInfo(){
+  const name = localStorage.getItem('organizationName') || '';
+  const phone = localStorage.getItem('organizationPhone') || '';
+  const address = localStorage.getItem('organizationAddress') || '';
+  if($('#org-name')) $('#org-name').value = name;
+  if($('#org-phone')) $('#org-phone').value = phone;
+  if($('#org-address')) $('#org-address').value = address;
+}
+
+function showCustomizePanel(section){
+  // activate the inline customize panel and deactivate others
+  document.querySelectorAll('.qm-content').forEach(c=>c.classList.remove('active'));
+  document.querySelectorAll('.qm-tab').forEach(t=>t.classList.remove('active'));
+  const panel = $('#customize');
+  if(!panel) return;
+  attachCustomizeRealtimeListeners();
+  renderCustomizeSection(section || 'counters');
+  panel.classList.add('active');
+  activateCustomizeSection(section || 'counters');
+}
+
+function activateCustomizeSection(section){
+  const panel = $('#customize');
+  if(!panel) return;
+  panel.querySelectorAll('.customize-section').forEach(sec => {
+    const isActive = sec.dataset.section === section;
+    sec.classList.toggle('hidden', !isActive);
+    if(isActive) sec.scrollIntoView({behavior:'smooth', block:'center'});
+  });
+}
+
+function closeCustomizePanel(){
+  detachCustomizeRealtimeListeners();
+  document.querySelectorAll('.qm-content').forEach(c=>c.classList.remove('active'));
+  document.querySelectorAll('.qm-tab').forEach(t=>t.classList.remove('active'));
+  const reportsTab = document.querySelector('.qm-tab[data-tab="reports"]');
+  const reportsPanel = $('#reports');
+  if(reportsTab) reportsTab.classList.add('active');
+  if(reportsPanel) reportsPanel.classList.add('active');
+}
+
 // Select counter card and show service options
 window.selectCounterCard = (counterId) => {
   const counter = currentCounters[counterId];
@@ -387,8 +518,7 @@ function renderServiceCheckboxes(counterId) {
   if(!container) return;
   container.innerHTML = '';
 
-  const assignment = currentAssignments[counterId] || {};
-  const assignedServices = assignment.services || [];
+  const assignedServices = getAssignmentServices(currentAssignments[counterId] || {});
 
   if(Object.keys(currentServices).length === 0) {
     container.innerHTML = '<p class="muted small">No services available. Create services first.</p>';
@@ -544,6 +674,85 @@ function attachEventListeners() {
       window.location.href = 'index.html';
     });
   }
+
+  // Customize panel buttons and menu
+  const customizeBtn = $('#customize-org');
+  const customizeMenu = $('#customize-menu');
+  if(customizeBtn && customizeMenu){
+    customizeBtn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      customizeMenu.classList.toggle('hidden');
+    });
+
+    // menu items
+    customizeMenu.querySelectorAll('.qm-menu-item').forEach(btn => {
+      btn.addEventListener('click', (ev)=>{
+        const section = btn.getAttribute('data-section');
+        customizeMenu.classList.add('hidden');
+        showCustomizePanel(section);
+      });
+    });
+
+    // close menu when clicking outside
+    document.addEventListener('click', (ev)=>{
+      if(!customizeMenu.classList.contains('hidden')){
+        const path = ev.composedPath ? ev.composedPath() : (ev.path || []);
+        if(!path.includes(customizeMenu) && !path.includes(customizeBtn)) customizeMenu.classList.add('hidden');
+      }
+    });
+  } else if(customizeBtn){
+    if(customizeBtn) customizeBtn.addEventListener('click', showCustomizePanel);
+  }
+
+  const backToReportsBtn = $('#back-to-reports');
+  if(backToReportsBtn) backToReportsBtn.addEventListener('click', closeCustomizePanel);
+
+  loadOrganizationInfo();
+
+  // Open customize panel from inline buttons (pass section)
+  const openFromCounters = $('#open-customize-from-counters'); if(openFromCounters) openFromCounters.addEventListener('click', ()=>showCustomizePanel('counters'));
+  const openFromServices = $('#open-customize-from-services'); if(openFromServices) openFromServices.addEventListener('click', ()=>showCustomizePanel('services'));
+  const openFromAssignments = $('#open-customize-from-assignments'); if(openFromAssignments) openFromAssignments.addEventListener('click', ()=>showCustomizePanel('assignments'));
+
+  // Modal add/create handlers
+  const modalAddCounter = $('#modal-add-counter');
+  if(modalAddCounter) modalAddCounter.addEventListener('click', async () => {
+    const name = $('#modal-counter-name')?.value?.trim();
+    const status = $('#modal-counter-status')?.value || 'active';
+    if(!name) { showMessage('Please enter counter name', 'error'); return; }
+    try{ await countersDB.create(name, status); renderCustomizeLists(); $('#modal-counter-name').value=''; showMessage('Counter added', 'success'); }
+    catch(err){ showMessage(err.message || String(err), 'error'); }
+  });
+
+  const modalAddService = $('#modal-add-service');
+  if(modalAddService) modalAddService.addEventListener('click', async () => {
+    const name = $('#modal-service-name')?.value?.trim();
+    const desc = $('#modal-service-desc')?.value || '';
+    const time = $('#modal-service-time')?.value || 0;
+    if(!name) { showMessage('Please enter service name', 'error'); return; }
+    try{ await servicesDB.create(name, desc, time); renderCustomizeLists(); $('#modal-service-name').value=''; $('#modal-service-desc').value=''; $('#modal-service-time').value=''; showMessage('Service added', 'success'); }
+    catch(err){ showMessage(err.message || String(err), 'error'); }
+  });
+
+  const saveOrganizationBtn = $('#save-organization');
+  if(saveOrganizationBtn) saveOrganizationBtn.addEventListener('click', () => {
+    const name = $('#org-name')?.value?.trim() || '';
+    const phone = $('#org-phone')?.value?.trim() || '';
+    const address = $('#org-address')?.value?.trim() || '';
+    localStorage.setItem('organizationName', name);
+    localStorage.setItem('organizationPhone', phone);
+    localStorage.setItem('organizationAddress', address);
+    showMessage('Organization details saved', 'success');
+  });
+
+  const modalSaveAssignment = $('#modal-save-assignment');
+  if(modalSaveAssignment) modalSaveAssignment.addEventListener('click', async () => {
+    const counterId = $('#modal-assignment-counter')?.value;
+    if(!counterId){ showMessage('Select a counter first', 'error'); return; }
+    const checked = Array.from(document.querySelectorAll('#modal-assignment-services input[type="checkbox"]:checked')).map(i=>i.value);
+    try{ await assignmentsDB.save(counterId, checked); renderCustomizeLists(); showMessage('Assignment saved', 'success'); }
+    catch(err){ showMessage(err.message || String(err), 'error'); }
+  });
 }
 
 window.editCounter = async (id) => {
@@ -603,6 +812,105 @@ window.editAssignment = async (counterId) => {
 // ============================================================
 
 let charts = {};
+
+let peakListenerAttached = false;
+let customizeListenersAttached = false;
+let customizeListenersRefs = { counters: null, services: null, assignments: null };
+let customizeListenersCallbacks = { counters: null, services: null, assignments: null };
+
+async function computePeakHoursData() {
+  // Buckets centered at 6am,9am,12pm,3pm,6pm,9pm with ranges
+  const ranges = [ [5,8], [8,11], [11,14], [14,17], [17,20], [20,23] ];
+  const counts = [0,0,0,0,0,0];
+  const days = 7;
+  for(let i=0;i<days;i++){
+    const d = new Date(Date.now() - i*86400000);
+    const dateStr = d.toISOString().split('T')[0];
+    try{
+      const tokens = await tokensDB.getByDate(dateStr);
+      Object.values(tokens).forEach(t => {
+        const ts = t.timestamp || t.updatedAt || 0;
+        const hour = ts ? new Date(ts).getHours() : null;
+        if(hour === null) return;
+        for(let j=0;j<ranges.length;j++){
+          const [lo,hi] = ranges[j];
+          if(hour >= lo && hour <= hi){ counts[j]++; break; }
+        }
+      });
+    }catch(e){ /* ignore date fetch errors */ }
+  }
+  return counts;
+}
+
+async function updatePeakHoursChart(){
+  if(!charts.peakHoursChart) return;
+  try{
+    const data = await computePeakHoursData();
+    charts.peakHoursChart.data.datasets[0].data = data;
+    charts.peakHoursChart.update();
+  }catch(e){ console.error('Failed updating peak hours', e); }
+}
+
+function setupPeakHoursRealtimeListener(){
+  if(peakListenerAttached) return;
+  peakListenerAttached = true;
+  if(!currentUserUID) return;
+  const ref = db.ref(`users/${currentUserUID}/tokens`);
+  ref.on('value', ()=>{ updatePeakHoursChart(); });
+}
+
+function attachCustomizeRealtimeListeners(){
+  if(customizeListenersAttached) return;
+  customizeListenersAttached = true;
+  if(!currentUserUID) return;
+
+  customizeListenersRefs.counters = db.ref(`users/${currentUserUID}/counters`);
+  customizeListenersCallbacks.counters = data => {
+    currentCounters = data || {};
+    renderCustomizeLists();
+    renderCounters(currentCounters);
+    renderCounterCards(currentCounters, currentServices);
+    initializeCharts(currentCounters, currentServices, currentAssignments);
+  };
+  customizeListenersRefs.counters.on('value', customizeListenersCallbacks.counters);
+
+  customizeListenersRefs.services = db.ref(`users/${currentUserUID}/services`);
+  customizeListenersCallbacks.services = data => {
+    currentServices = data || {};
+    renderCustomizeLists();
+    renderServices(currentServices);
+    renderCounterCards(currentCounters, currentServices);
+    initializeCharts(currentCounters, currentServices, currentAssignments);
+    setupQueueListeners(Object.keys(currentServices));
+  };
+  customizeListenersRefs.services.on('value', customizeListenersCallbacks.services);
+
+  customizeListenersRefs.assignments = db.ref(`users/${currentUserUID}/assignments`);
+  customizeListenersCallbacks.assignments = data => {
+    currentAssignments = data || {};
+    renderCustomizeLists();
+    renderAssignments(currentAssignments, currentCounters, currentServices);
+  };
+  customizeListenersRefs.assignments.on('value', customizeListenersCallbacks.assignments);
+}
+
+function detachCustomizeRealtimeListeners(){
+  if(!customizeListenersAttached) return;
+
+  if(customizeListenersRefs.counters && customizeListenersCallbacks.counters) {
+    customizeListenersRefs.counters.off('value', customizeListenersCallbacks.counters);
+  }
+  if(customizeListenersRefs.services && customizeListenersCallbacks.services) {
+    customizeListenersRefs.services.off('value', customizeListenersCallbacks.services);
+  }
+  if(customizeListenersRefs.assignments && customizeListenersCallbacks.assignments) {
+    customizeListenersRefs.assignments.off('value', customizeListenersCallbacks.assignments);
+  }
+
+  customizeListenersAttached = false;
+  customizeListenersRefs = { counters: null, services: null, assignments: null };
+  customizeListenersCallbacks = { counters: null, services: null, assignments: null };
+}
 
 async function initializeCharts(counters, services, assignments) {
   // Counter Activity Chart (Bar Chart)
@@ -696,20 +1004,18 @@ async function initializeCharts(counters, services, assignments) {
     });
   }
 
-  // Peak Hours Chart
+  // Peak Hours Chart (real-time)
   const peakCtx = $('#peakHoursChart');
   if(peakCtx) {
     if(charts.peakHoursChart) charts.peakHoursChart.destroy();
     const hours = ['6am', '9am', '12pm', '3pm', '6pm', '9pm'];
-    const peakData = [15, 45, 80, 60, 90, 30];
-    
     charts.peakHoursChart = new Chart(peakCtx, {
       type: 'radar',
       data: {
         labels: hours,
         datasets: [{
           label: 'Customer Activity',
-          data: peakData,
+          data: [0,0,0,0,0,0],
           borderColor: '#0a8f47',
           backgroundColor: 'rgba(10,143,71,0.1)',
           borderWidth: 2,
@@ -722,9 +1028,12 @@ async function initializeCharts(counters, services, assignments) {
         responsive: true,
         maintainAspectRatio: true,
         plugins: { legend: { display: true } },
-        scales: { r: { beginAtZero: true, max: 100 } }
+        scales: { r: { beginAtZero: true } }
       }
     });
+    // populate with live data and attach listener
+    updatePeakHoursChart();
+    setupPeakHoursRealtimeListener();
   }
 
   // Update summary statistics
@@ -808,6 +1117,7 @@ async function initializeApp() {
 
     renderCounters(currentCounters);
     renderServices(currentServices);
+    setupQueueListeners(Object.keys(currentServices));
     renderAssignments(currentAssignments, currentCounters, currentServices);
 
     // Render counter cards for assignments
@@ -823,6 +1133,7 @@ async function initializeApp() {
     servicesDB.listen(data => {
       currentServices = data;
       renderServices(data);
+      setupQueueListeners(Object.keys(currentServices));
     });
 
     assignmentsDB.listen(data => {
@@ -830,17 +1141,12 @@ async function initializeApp() {
       renderAssignments(data, currentCounters, currentServices);
     });
 
-    // Real-time queue updates
-    Object.keys(currentServices).forEach(serviceId => {
-      queueDB.listenByService(serviceId, (queueData) => {
-        const allQueues = {};
-        Object.assign(allQueues, queueData);
-        renderQueueStatus(allQueues, currentServices);
-      });
-    });
-
     initTabs();
     attachEventListeners();
+    // Initialize charts so Reports & Analytics is shown on landing
+    try{
+      initializeCharts(currentCounters, currentServices, currentAssignments);
+    }catch(err){ console.error('Charts init failed', err); }
     showMessage('Queue manager loaded', 'success');
   } catch(err) {
     showMessage('Init error: ' + err.message, 'error');
@@ -861,7 +1167,8 @@ auth.onAuthStateChanged(async (user) => {
     
     const snap = await db.ref('users/' + user.uid).once('value');
     const profile = snap.val() || {};
-    if(profile.role !== 'approved') {
+    const allowed = profile.role === 'approved' || profile.role === 'superadmin' || await isSuperAdmin(user);
+    if(!allowed) {
       window.location.href = 'dashboard.html';
       return;
     }
