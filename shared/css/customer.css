@@ -290,11 +290,21 @@ button, input, select { font: inherit; }
 }
 
 .qr-reader {
-  min-height: 300px;
+  min-height: 320px;
+  aspect-ratio: 4 / 3;
+  width: 100%;
   border-radius: 16px;
   overflow: hidden;
   border: 1px solid var(--card-border);
   background: rgba(0, 0, 0, 0.25);
+}
+
+.qr-reader video,
+.qr-reader canvas {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  display: block;
 }
 
 .scan-actions {
@@ -903,7 +913,10 @@ button, input, select { font: inherit; }
   .service-grid,
   .booking-org-grid,
   .service-category-grid { grid-template-columns: 1fr; }
-  .qr-reader { min-height: 240px; }
+  .qr-reader {
+    min-height: 240px;
+    max-height: 70vh;
+  }
   .input-row { flex-direction: column; }
   .primary, .secondary, .ghost-btn, .booking-link { width: 100%; }
   .app-card { padding: 20px; }

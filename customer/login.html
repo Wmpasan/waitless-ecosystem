@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Waitless — Customer sign in</title>
+  <link rel="stylesheet" href="../shared/css/redesign.css" />
+  <link rel="stylesheet" href="../shared/css/unified-ui.css" />
+  <style>
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background: linear-gradient(135deg, #f8fbff 0%, #eef5ff 100%);
+    }
+
+    .customer-auth-shell {
+      max-width: 520px;
+      margin: 2rem auto;
+      padding: 0 1rem 2rem;
+    }
+
+    .customer-auth-card {
+      border-radius: 20px;
+      box-shadow: 0 16px 50px rgba(11, 18, 32, 0.1);
+      padding: 1.5rem;
+      background: #fff;
+    }
+
+    .customer-auth-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin: 1rem 0 1.25rem;
+      flex-wrap: wrap;
+    }
+
+    .customer-auth-tabs button {
+      border: 1px solid #d7e2f0;
+      background: #f8fbff;
+      color: #0f172a;
+      border-radius: 999px;
+      padding: 0.6rem 0.9rem;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .customer-auth-tabs button.active {
+      background: #0f6fff;
+      color: #fff;
+      border-color: #0f6fff;
+    }
+
+    .customer-auth-panel {
+      display: none;
+    }
+
+    .customer-auth-panel.active {
+      display: block;
+    }
+
+    .customer-auth-form {
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+
+    .customer-auth-form label {
+      font-weight: 600;
+      color: #0f172a;
+    }
+
+    .customer-auth-form input {
+      width: 100%;
+      border: 1px solid #d7e2f0;
+      border-radius: 12px;
+      padding: 0.8rem 0.9rem;
+      font: inherit;
+      box-sizing: border-box;
+    }
+
+    .customer-auth-form button[type="submit"] {
+      margin-top: 0.3rem;
+    }
+  </style>
+</head>
+<body class="wl-body">
+  <header class="wl-topbar">
+    <a class="wl-brand" href="../index.html" aria-label="Waitless home">
+      <img src="../images/new.png" alt="" />
+      <span>Waitless</span>
+    </a>
+  </header>
+
+  <main class="customer-auth-shell">
+    <div class="customer-auth-card">
+      <p class="wl-eyebrow">Customer</p>
+      <h1>Access your customer account</h1>
+      <p class="wl-muted">Sign in, create an account, or reset your password with Firebase authentication.</p>
+
+      <div class="customer-auth-tabs" role="tablist" aria-label="Customer auth tabs">
+        <button type="button" class="active" data-view="login">Login</button>
+        <button type="button" data-view="register">Register</button>
+        <button type="button" data-view="reset">Reset password</button>
+      </div>
+
+      <div id="message" class="message" role="status" aria-live="polite"></div>
+
+      <section id="login-panel" class="customer-auth-panel active">
+        <form id="login-form" class="customer-auth-form">
+          <label for="login-email">Email</label>
+          <input id="login-email" type="email" placeholder="you@example.com" required />
+
+          <label for="login-password">Password</label>
+          <input id="login-password" type="password" placeholder="Enter your password" required />
+
+          <button type="submit" class="primary">Sign in</button>
+        </form>
+      </section>
+
+      <section id="register-panel" class="customer-auth-panel">
+        <form id="register-form" class="customer-auth-form">
+          <label for="register-name">Your name</label>
+          <input id="register-name" type="text" placeholder="Your name" required />
+
+          <label for="register-email">Email</label>
+          <input id="register-email" type="email" placeholder="you@example.com" required />
+
+          <label for="register-phone">Phone number</label>
+          <input id="register-phone" type="tel" placeholder="+1 555 000 0000" />
+
+          <label for="register-password">Password</label>
+          <input id="register-password" type="password" placeholder="Choose a password" required />
+
+          <button type="submit" class="primary">Create account</button>
+        </form>
+      </section>
+
+      <section id="reset-panel" class="customer-auth-panel">
+        <form id="reset-form" class="customer-auth-form">
+          <label for="reset-email">Email</label>
+          <input id="reset-email" type="email" placeholder="you@example.com" required />
+
+          <button type="submit" class="primary ghost">Send reset email</button>
+        </form>
+      </section>
+    </div>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="../js/config/firebase-config.js"></script>
+  <script src="../js/customer/login.js"></script>
+  <script src="../shared/js/index-ui.js"></script>
+</body>
+</html>

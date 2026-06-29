@@ -837,10 +837,36 @@ function setMobileAppBlocked(isBlocked) {
   }
 }
 
+async function hasOrganizationProfile(user) {
+  if (!user) return false;
+  const snap = await db.ref(`users/${user.uid}`).once('value');
+  const profile = snap.val() || {};
+  const role = String(profile?.role || '').trim().toLowerCase();
+  const looksLikeOrganization = ['approved', 'pending', 'staff', 'kiosk', 'admin', 'superadmin'].includes(role)
+    || !!(profile?.organizationName || profile?.name || profile?.profile?.name || profile?.profile?.organizationName);
+  return snap.exists() && looksLikeOrganization;
+}
+
 async function loadAppUserProfile(user) {
   if (!user) return null;
-  const snap = await db.ref(`appuser/${user.uid}`).once('value');
-  return snap.val() || null;
+  const profileRef = db.ref(`appuser/${user.uid}`);
+  const snap = await profileRef.once('value');
+
+  if (snap.exists()) {
+    return snap.val() || null;
+  }
+
+  const fallbackProfile = {
+    uid: user.uid,
+    name: user.displayName || '',
+    email: user.email || '',
+    phone: '',
+    createdAt: firebase.database.ServerValue.TIMESTAMP,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP
+  };
+
+  await profileRef.set(fallbackProfile);
+  return fallbackProfile;
 }
 
 async function saveAppUserProfile(updates) {
@@ -1622,9 +1648,59 @@ async function bindTracker(tokenNumber) {
 
 function stopScanner() {
   if (state.scanner) {
-    state.scanner.stop().catch(() => {});
+    try {
+      state.scanner.stop().catch(() => {});
+    } catch (_) {
+      // ignore scanner stop errors
+    }
     state.scanner = null;
   }
+}
+
+function getScannerConfig() {
+  const viewportWidth = Math.max(280, Math.min(window.innerWidth - 40, 720));
+  const viewportHeight = Math.max(280, Math.min(window.innerHeight - 220, 720));
+  const scanBoxSize = Math.max(240, Math.min(viewportWidth, viewportHeight) * 0.85);
+
+  return {
+    fps: 12,
+    qrbox: {
+      width: scanBoxSize,
+      height: scanBoxSize
+    },
+    aspectRatio: 1.0
+  };
+}
+
+async function ensureCameraAccess() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error('This browser does not support camera access.');
+  }
+
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: {
+      facingMode: 'environment',
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
+    }
+  });
+
+  stream.getTracks().forEach((track) => track.stop());
+}
+
+async function resolveCameraId() {
+  if (typeof Html5Qrcode === 'undefined' || typeof Html5Qrcode.getCameras !== 'function') {
+    return null;
+  }
+
+  const cameras = await Html5Qrcode.getCameras();
+  if (!Array.isArray(cameras) || cameras.length === 0) {
+    return null;
+  }
+
+  const preferredLabel = /back|rear|environment|world/i;
+  const preferredCamera = cameras.find((camera) => preferredLabel.test(String(camera?.label || '')));
+  return preferredCamera?.id || cameras[0]?.id || null;
 }
 
 async function startScanner() {
@@ -1637,32 +1713,51 @@ async function startScanner() {
 
   stopScanner();
   readerEl.innerHTML = '';
-  state.scanner = new Html5Qrcode(readerId);
+  state.scanner = new Html5Qrcode(readerId, { useBarCodeDetectorIfSupported: true });
+
+  const scanSuccess = async (decodedText) => {
+    const orgId = parseScannedValue(decodedText);
+    stopScanner();
+    if (!orgId) return;
+
+    if (isScanPage()) {
+      const appointmentUrl = new URL('appointment.html', window.location.href);
+      appointmentUrl.searchParams.set('orgId', orgId);
+      window.location.href = appointmentUrl.toString();
+      return;
+    }
+
+    await activateOrganization(orgId);
+    showMessage('Organization loaded from QR.', 'success');
+  };
+
+  const scanError = () => {
+    // Ignore intermediate scan errors and keep trying.
+  };
 
   try {
+    await ensureCameraAccess();
+    const scanConfig = getScannerConfig();
+    const cameraId = await resolveCameraId();
+
+    if (!cameraId) {
+      throw new Error('No camera was found for scanning.');
+    }
+
     await state.scanner.start(
-      { facingMode: 'environment' },
-      { fps: 10, qrbox: 220 },
-      async (decodedText) => {
-        const orgId = parseScannedValue(decodedText);
-        stopScanner();
-        if (!orgId) return;
-
-        if (isScanPage()) {
-          const appointmentUrl = new URL('appointment.html', window.location.href);
-          appointmentUrl.searchParams.set('orgId', orgId);
-          window.location.href = appointmentUrl.toString();
-          return;
-        }
-
-        await activateOrganization(orgId);
-        showMessage('Organization loaded from QR.', 'success');
-      },
-      () => {}
+      cameraId,
+      scanConfig,
+      scanSuccess,
+      scanError
     );
-    showMessage('Scanner started. Point it at the organization QR.', 'info');
+    showMessage('Scanner started. Hold the QR code anywhere in the camera view.', 'info');
   } catch (err) {
-    showMessage('Unable to start scanner: ' + err.message, 'error');
+    const message = String(err?.message || err || 'Camera access denied.');
+    if (message.includes('NotAllowedError') || message.includes('Permission') || message.includes('denied')) {
+      showMessage('Camera permission was blocked. Please allow camera access in your browser and try again.', 'error');
+    } else {
+      showMessage('Unable to start scanner: ' + message, 'error');
+    }
   }
 }
 
@@ -1856,19 +1951,16 @@ async function bootstrapApp() {
       window.location.replace(getLoginUrl());
       return;
     }
-    // Require email-verified accounts for app access
-    if (user.email && !user.emailVerified) {
-      try {
-        await user.reload();
-      } catch (e) {
-        // ignore reload errors
-      }
-      if (!user.emailVerified) {
-        stopTokenHistoryListener();
-        window.location.replace(getLoginUrl());
-        return;
-      }
+
+    const blockedByOrganization = await hasOrganizationProfile(user);
+    if (blockedByOrganization) {
+      stopTokenHistoryListener();
+      await auth.signOut();
+      showMessage('This account is registered for the organization portal and cannot access the customer portal.', 'error');
+      window.location.replace(getLoginUrl());
+      return;
     }
+
     try {
       const appUser = await loadAppUserProfile(user);
       if (!appUser) {

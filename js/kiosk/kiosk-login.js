@@ -15,6 +15,7 @@ const userAuthView = document.getElementById('user-auth-view');
 const userAuthForm = document.getElementById('user-auth-form');
 const userEmailInput = document.getElementById('user-email');
 const userPasswordInput = document.getElementById('user-password');
+const userAuthSubmitButton = userAuthForm.querySelector('button[type="submit"]');
 
 // Step 2: KIOSK Selection
 const kioskSelectView = document.getElementById('kiosk-select-view');
@@ -72,6 +73,18 @@ function isNumericName(value) {
   return /^\d+$/.test(String(value || '').trim());
 }
 
+function updateUserAuthButton() {
+  if (!userAuthSubmitButton) return;
+
+  if (currentUser) {
+    userAuthSubmitButton.textContent = 'Sign out';
+    userAuthSubmitButton.dataset.mode = 'signout';
+  } else {
+    userAuthSubmitButton.textContent = 'Sign in';
+    userAuthSubmitButton.dataset.mode = 'signin';
+  }
+}
+
 function getFriendlyKioskName(kiosk, index) {
   const existingName = String(kiosk?.name || '').trim();
   if (existingName && !isNumericName(existingName)) {
@@ -105,6 +118,11 @@ function updateStepIndicator(activeStep) {
 userAuthForm.addEventListener('submit', async (e) => {
   e.preventDefault();
 
+  if (userAuthSubmitButton?.dataset.mode === 'signout') {
+    await handleUserSignOut();
+    return;
+  }
+
   const email = userEmailInput.value.trim();
   const password = userPasswordInput.value;
 
@@ -124,6 +142,7 @@ userAuthForm.addEventListener('submit', async (e) => {
     currentUserUID = result.user.uid;
 
     showMessage('Authentication successful!', 'success');
+    updateUserAuthButton();
     
     // Move to step 2: KIOSK selection
     setTimeout(() => {
@@ -135,13 +154,43 @@ userAuthForm.addEventListener('submit', async (e) => {
   } finally {
     const userAuthButton = userAuthForm.querySelector('button[type="submit"]');
     userAuthButton.disabled = false;
-    userAuthButton.textContent = 'Login';
+    updateUserAuthButton();
   }
 });
 
 // ============================================================
 // STEP 2: KIOSK SELECTION
 // ============================================================
+
+async function handleUserSignOut() {
+  try {
+    await auth.signOut();
+    currentUser = null;
+    currentUserUID = null;
+    organizationId = null;
+    loadedKiosks = [];
+    selectedKioskId = null;
+    selectedKioskName = null;
+    currentPin = '';
+    userEmailInput.value = '';
+    userPasswordInput.value = '';
+    kioskSelect.innerHTML = '<option value="">-- Choose a KIOSK --</option>';
+    kioskSelect.disabled = true;
+    updatePinDisplay();
+
+    kioskSelectView.classList.add('hidden');
+    pinEntryView.classList.add('hidden');
+    userAuthView.classList.remove('hidden');
+    updateStepIndicator(1);
+    updateUserAuthButton();
+
+    showMessage('Signed out. Please sign in again.', 'info');
+    userEmailInput.focus();
+  } catch (err) {
+    console.error('Logout error:', err);
+    showMessage('Error signing out', 'error');
+  }
+}
 
 async function goToKioskSelection() {
   updateStepIndicator(2);
@@ -267,26 +316,7 @@ kioskSelectForm.addEventListener('submit', async (e) => {
  */
 backFromKioskBtn.addEventListener('click', (e) => {
   e.preventDefault();
-  
-  // Logout and go back
-  auth.signOut().then(() => {
-    currentUser = null;
-    currentUserUID = null;
-    organizationId = null;
-    loadedKiosks = [];
-    userEmailInput.value = '';
-    userPasswordInput.value = '';
-    
-    kioskSelectView.classList.add('hidden');
-    userAuthView.classList.remove('hidden');
-    updateStepIndicator(1);
-    
-    showMessage('Logged out. Please login again.', 'info');
-    userEmailInput.focus();
-  }).catch(err => {
-    console.error('Logout error:', err);
-    showMessage('Error logging out', 'error');
-  });
+  handleUserSignOut();
 });
 
 // ============================================================
@@ -475,6 +505,9 @@ document.addEventListener('DOMContentLoaded', () => {
       goToKioskSelection();
     } else {
       // User not authenticated, show step 1
+      currentUser = null;
+      currentUserUID = null;
+      updateUserAuthButton();
       updateStepIndicator(1);
       userAuthView.classList.remove('hidden');
       userEmailInput.focus();

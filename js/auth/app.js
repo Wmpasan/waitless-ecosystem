@@ -32,6 +32,11 @@ function generateSalt(){ const a = new Uint8Array(16); window.crypto.getRandomVa
 async function isSuperAdmin(user, profile = {}){
   return waitlessIsSuperadmin(user, profile);
 }
+async function hasCustomerProfile(user){
+  if (!user) return false;
+  const snap = await db.ref('appuser/' + user.uid).once('value');
+  return !!snap.exists();
+}
 function formatDate(ts){
   if(!ts) return 'Unknown date';
   try { return new Date(ts).toLocaleString(); }
@@ -181,6 +186,12 @@ $('#login-form').addEventListener('submit', async e=>{
   const password = $('#login-password').value;
   try{
     const userCred = await auth.signInWithEmailAndPassword(email, password);
+    const customerAccount = await hasCustomerProfile(userCred.user);
+    if (customerAccount) {
+      await auth.signOut();
+      showMessage('This account is registered for the customer portal and cannot access the organization portal.', 'error');
+      return;
+    }
     const snap = await db.ref('users/' + userCred.user.uid).once('value');
     const profile = snap.val() || {};
     const superAdmin = await isSuperAdmin(userCred.user, profile);
@@ -248,6 +259,13 @@ async function renderProfile(user){
 // Monitor auth state
 auth.onAuthStateChanged(async user=>{
   if(user){
+    const customerAccount = await hasCustomerProfile(user);
+    if (customerAccount) {
+      await auth.signOut();
+      showMessage('This account is registered for the customer portal and cannot access the organization portal.', 'error');
+      showSection('#login-section');
+      return;
+    }
     const snap = await db.ref('users/' + user.uid).once('value');
     const profile = snap.val() || {};
     const superAdmin = await isSuperAdmin(user, profile);

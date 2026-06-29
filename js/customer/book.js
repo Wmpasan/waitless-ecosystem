@@ -751,6 +751,16 @@ async function loadOrganizations() {
  * =========================================================================
  */
 
+async function hasOrganizationProfile(user) {
+  if (!user) return false;
+  const snap = await db.ref(`users/${user.uid}`).once('value');
+  const profile = snap.val() || {};
+  const role = String(profile?.role || '').trim().toLowerCase();
+  const looksLikeOrganization = ['approved', 'pending', 'staff', 'kiosk', 'admin', 'superadmin'].includes(role)
+    || !!(profile?.organizationName || profile?.name || profile?.profile?.name || profile?.profile?.organizationName);
+  return snap.exists() && looksLikeOrganization;
+}
+
 function bindEvents() {
   const searchInput = $('#booking-search-input');
   const clearBtn = $('#booking-clear-btn');
@@ -780,6 +790,14 @@ function bindEvents() {
 
     try {
       if (!user) {
+        redirectToLogin();
+        return;
+      }
+
+      const blockedByOrganization = await hasOrganizationProfile(user);
+      if (blockedByOrganization) {
+        await auth.signOut();
+        showMessage('This account is registered for the organization portal and cannot access the customer portal.', 'error');
         redirectToLogin();
         return;
       }

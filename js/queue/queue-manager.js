@@ -17,6 +17,12 @@ let currentOrganizationProfile = null;
 function $(sel) { return document.querySelector(sel); }
 function $$(sel) { return document.querySelectorAll(sel); }
 
+function updateBusinessAuthButton(button, user) {
+  if (!button) return;
+  button.textContent = user ? 'Sign out' : 'Sign in';
+  button.dataset.authState = user ? 'signed-in' : 'signed-out';
+}
+
 function showMessage(msg, type = 'info') {
   const el = $('#message');
   if(!el) return;
@@ -1611,7 +1617,12 @@ function attachEventListeners() {
 
   const signoutBtn = $('#signout');
   if(signoutBtn) {
+    updateBusinessAuthButton(signoutBtn, auth.currentUser);
     signoutBtn.addEventListener('click', async () => {
+      if (!auth.currentUser) {
+        window.location.href = '../auth/login.html';
+        return;
+      }
       await auth.signOut();
       window.location.href = '../index.html';
     });
@@ -2297,6 +2308,8 @@ async function initializeApp(profile = currentOrganizationProfile) {
 
 // Auth check and init
 auth.onAuthStateChanged(async (user) => {
+  updateBusinessAuthButton($('#signout'), user);
+
   if(!user) {
     window.location.href = '../index.html';
     return;

@@ -35,15 +35,30 @@
     }
   }
 
+  function looksLikeOrganizationProfile(profile) {
+    const role = String(profile?.role || '').trim().toLowerCase();
+    if (['approved', 'pending', 'staff', 'kiosk', 'admin', 'superadmin'].includes(role)) return true;
+    return !!(profile?.organizationName || profile?.name || profile?.profile?.name || profile?.profile?.organizationName);
+  }
+
   async function getCurrentProfile(firebaseAuth, firebaseDb) {
     const user = firebaseAuth?.currentUser;
     if (!user || !firebaseDb) return { user, profile: null, role: 'unknown' };
-    const snap = await firebaseDb.ref(`users/${user.uid}`).once('value');
-    const profile = snap.val() || {};
+    const [userSnap, appUserSnap] = await Promise.all([
+      firebaseDb.ref(`users/${user.uid}`).once('value'),
+      firebaseDb.ref(`appuser/${user.uid}`).once('value')
+    ]);
+    const profile = userSnap.val() || {};
+    if (appUserSnap.exists()) {
+      return { user, profile, role: 'customer' };
+    }
     if (await hasSuperadminClaim(user)) {
       return { user, profile, role: 'admin' };
     }
-    return { user, profile, role: normalizeRole(profile) };
+    if (looksLikeOrganizationProfile(profile)) {
+      return { user, profile, role: normalizeRole(profile) };
+    }
+    return { user, profile, role: 'unknown' };
   }
 
   async function requireRole(options) {

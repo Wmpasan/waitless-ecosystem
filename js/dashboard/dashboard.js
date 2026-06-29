@@ -7,6 +7,13 @@ const db = firebase.database();
 function $(sel){ return document.querySelector(sel); }
 function showMessage(msg, type){ const el = $('#message'); el.textContent = msg; el.className = 'message ' + type; }
 
+function updateDashboardAuthButton(user) {
+  const signoutBtn = $('#signout');
+  if (!signoutBtn) return;
+  signoutBtn.textContent = user ? 'Sign out' : 'Sign in';
+  signoutBtn.dataset.authState = user ? 'signed-in' : 'signed-out';
+}
+
 function formatDateValue(value) {
   if (!value) return 'Unknown';
   const date = new Date(value);
@@ -94,7 +101,12 @@ async function checkApprovalStatus(user) {
     }
 
     if (signoutBtn) {
+      updateDashboardAuthButton(user);
       signoutBtn.addEventListener('click', async () => {
+        if (!auth.currentUser) {
+          window.location.href = '../auth/login.html';
+          return;
+        }
         await auth.signOut();
         window.location.href = '../index.html';
       });
@@ -106,6 +118,8 @@ async function checkApprovalStatus(user) {
 }
 
 auth.onAuthStateChanged(async (user) => {
+  updateDashboardAuthButton(user);
+
   if (!user) {
     window.location.href = '../index.html';
   } else {
